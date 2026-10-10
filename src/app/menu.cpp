@@ -89,7 +89,7 @@ MenuResult Menu::change(const MenuItem item, const int step)
 {
     switch (item) {
     case MenuItem::Difficulty:
-        m_settings.difficulty = _step(m_settings.difficulty, step, game::kDifficultyCount);
+        m_settings.difficulty = _step(m_settings.difficulty, step, static_cast<int>(game::kDifficulties.size()));
         break;
     case MenuItem::Sound: m_settings.volume = _step(m_settings.volume, step, gamelib::audio::kVolumeLevelCount); break;
     case MenuItem::Fullscreen: m_settings.fullscreen = !m_settings.fullscreen; break;
