@@ -69,7 +69,7 @@ void Ai::plan(const Match& match)
         const float maxError = t.aimError * speedFactor * (kPaddleSize.y / 2.0f + kBallRadius);
         m_error = m_rng.uniform(-maxError, maxError);
     }
-    m_target = predictY(ball.position, ball.velocity, paddleX) + m_error;
+    m_target = predictY(ball.position.value(), ball.velocity, paddleX) + m_error;
 }
 
 float Ai::decide(const Match& match)
@@ -79,7 +79,7 @@ float Ai::decide(const Match& match)
         plan(match);
         m_ticksToPlan = t.reactionTicks;
     }
-    const float distance = m_target - match.paddle(m_side).y;
+    const float distance = m_target - match.paddle(m_side).y.value();
     if (std::abs(distance) <= t.deadZone) {
         return 0.0f;
     }

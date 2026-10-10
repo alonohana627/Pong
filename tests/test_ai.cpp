@@ -38,10 +38,10 @@ TEST_CASE("the AI heads for the predicted intercept and waits in the middle")
     match.placeBall({960.0f, 540.0f}, {700.0f, -300.0f});
     const float input = ai.decide(match);
     const float paddleX = match.paddle(Side::Right).rect(Side::Right).center().x;
-    const float expected = predictY(match.ball().position, match.ball().velocity, paddleX);
+    const float expected = predictY(match.ball().position.value(), match.ball().velocity, paddleX);
     // The aim error is bounded by the tuning: within a paddle-and-a-ball of the intercept.
     CHECK(std::abs(ai.target() - expected) <= kPaddleSize.y / 2.0f + kBallRadius);
-    CHECK((input < 0.0f) == (ai.target() < match.paddle(Side::Right).y));
+    CHECK((input < 0.0f) == (ai.target() < match.paddle(Side::Right).y.value()));
 
     // Ball moving away: back to the center after the next re-plan.
     match.placeBall({960.0f, 540.0f}, {-700.0f, 0.0f});

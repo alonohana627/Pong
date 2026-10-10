@@ -4,7 +4,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <utility>
 
 namespace pong::game {
 
@@ -13,13 +12,10 @@ using gamelib::core::Vec2;
 
 namespace {
 
-// Collisions can chain within one tick (wall, then paddle). More than this
-// many in a single tick only happens in degenerate corners; the rest of the
-// motion is then dropped for that tick.
-constexpr int kMaxBouncesPerTick = 4;
-// After a contact the ball is pushed this far off the surface, so the next
-// sweep does not report the same contact again.
-constexpr float kSeparation = 0.01f;
+// Collider ids for moveAndCollide.
+constexpr int kWallId = 0;
+constexpr int kLeftPaddleId = 1;
+constexpr int kRightPaddleId = 2;
 
 // The walls extend far beyond the court sideways and outwards, so a ball can
 // never slip around their ends.
@@ -39,7 +35,7 @@ float _radians(const float degrees)
 Rect Paddle::rect(const Side side) const
 {
     const float x = side == Side::Left ? kPaddleInset : kCourtWidth - kPaddleInset;
-    return Rect::fromCenter({x, y}, kPaddleSize);
+    return Rect::fromCenter({x, y.value()}, kPaddleSize);
 }
 
 Match::Match(const Rules& rules, const std::uint64_t seed, const Side firstReceiver)
@@ -51,7 +47,7 @@ Match::Match(const Rules& rules, const std::uint64_t seed, const Side firstRecei
 
 std::vector<Event> Match::takeEvents()
 {
-    return std::exchange(m_events, {});
+    return m_events.take();
 }
 
 std::optional<Side> Match::winner() const
@@ -64,30 +60,35 @@ std::optional<Side> Match::winner() const
 
 void Match::tick(const Input& input, const float dt)
 {
-    m_previousBall = m_ball.position;
-    for (const Side side : {Side::Left, Side::Right}) {
-        m_previousPaddleY[index(side)] = m_paddles[index(side)].y;
+    m_ball.position.beginTick();
+    for (Paddle& paddle : m_paddles) {
+        paddle.y.beginTick();
     }
     movePaddles(input, dt);
 
     switch (m_phase) {
     case Phase::Serving:
-        m_serveCountdown -= dt;
-        // A small tolerance: 120 ticks of 1/120 s add up to slightly less than
-        // 1 s in floating point, which would delay the serve by a tick.
-        if (m_serveCountdown <= 1e-4f) {
+        // Counted in whole ticks: exactly serveDelaySeconds at any tick rate
+        // that divides it, with no float drift.
+        if (!m_serveArmed) {
+            m_serveCountdown.start(gamelib::core::Countdown::ticksFor(m_rules.serveDelaySeconds, dt));
+            m_serveArmed = true;
+        }
+        if (m_serveCountdown.tick()) {
             serve();
         }
         break;
-    case Phase::Rally:
+    case Phase::Rally: {
         moveBall(dt);
         // A point once the ball has completely left the court.
-        if (m_ball.position.x + kBallRadius < 0.0f) {
+        const Vec2 ball = m_ball.position.value();
+        if (ball.x + kBallRadius < 0.0f) {
             pointFor(Side::Right);
-        } else if (m_ball.position.x - kBallRadius > kCourtWidth) {
+        } else if (ball.x - kBallRadius > kCourtWidth) {
             pointFor(Side::Left);
         }
         break;
+    }
     case Phase::GameOver: break;
     }
 }
@@ -97,67 +98,50 @@ void Match::movePaddles(const Input& input, const float dt)
     const std::array moves{std::clamp(input.left, -1.0f, 1.0f), std::clamp(input.right, -1.0f, 1.0f)};
     for (std::size_t i = 0; i < m_paddles.size(); ++i) {
         Paddle& paddle = m_paddles[i];
-        const float before = paddle.y;
-        paddle.y = std::clamp(paddle.y + moves[i] * m_rules.paddleSpeed * dt, kMinPaddleY, kMaxPaddleY);
-        paddle.velocity = dt > 0.0f ? (paddle.y - before) / dt : 0.0f;
+        float& y = paddle.y.value();
+        const float before = y;
+        y = std::clamp(y + moves[i] * m_rules.paddleSpeed * dt, kMinPaddleY, kMaxPaddleY);
+        paddle.velocity = dt > 0.0f ? (y - before) / dt : 0.0f;
     }
 }
 
 void Match::moveBall(const float dt)
 {
-    float remaining = 1.0f; // fraction of this tick's motion still to do
-    for (int bounce = 0; bounce < kMaxBouncesPerTick && remaining > 0.0f; ++bounce) {
-        const Vec2 motion = m_ball.velocity * (dt * remaining);
-
-        // The earliest contact among the walls and paddles along the motion.
-        struct Obstacle {
-            Rect rect;
-            std::optional<Side> paddle; // nullopt: a wall
-        };
-        const std::array<Obstacle, 4> obstacles{
-            Obstacle{kTopWall, std::nullopt},
-            Obstacle{kBottomWall, std::nullopt},
-            Obstacle{m_paddles[0].rect(Side::Left), Side::Left},
-            Obstacle{m_paddles[1].rect(Side::Right), Side::Right},
-        };
-        std::optional<gamelib::core::SweepHit> first;
-        std::optional<Side> firstPaddle;
-        for (const Obstacle& obstacle : obstacles) {
-            const auto hit = gamelib::core::sweep(m_ball.position, kBallRadius, motion, obstacle.rect);
-            if (hit && (!first || hit->time < first->time)) {
-                first = hit;
-                firstPaddle = obstacle.paddle;
+    const std::array<gamelib::core::Collider, 4> colliders{
+        gamelib::core::Collider{kTopWall, kWallId},
+        gamelib::core::Collider{kBottomWall, kWallId},
+        gamelib::core::Collider{m_paddles[0].rect(Side::Left), kLeftPaddleId},
+        gamelib::core::Collider{m_paddles[1].rect(Side::Right), kRightPaddleId},
+    };
+    const gamelib::core::MoveResult moved = gamelib::core::moveAndCollide(
+        m_ball.position.value(), kBallRadius, m_ball.velocity, dt, colliders,
+        [this](const gamelib::core::Contact& contact) {
+            m_ball.position.value() = contact.hit.center; // bounceOffPaddle reads the contact point
+            // A paddle's front face (or a corner mostly facing the court)
+            // returns the ball with an angle; its ends and the walls reflect.
+            if (contact.id != kWallId && std::abs(contact.hit.normal.x) > 0.5f) {
+                return bounceOffPaddle(contact.id == kLeftPaddleId ? Side::Left : Side::Right, contact.hit.normal,
+                                       contact.velocity);
             }
-        }
-        if (!first) {
-            m_ball.position += motion;
-            return;
-        }
-
-        m_ball.position = first->center + first->normal * kSeparation;
-        remaining *= 1.0f - first->time;
-        // A paddle's front face (or a corner mostly facing the court) returns
-        // the ball with an angle; its top and bottom ends just deflect it.
-        if (firstPaddle && std::abs(first->normal.x) > 0.5f) {
-            bounceOffPaddle(*firstPaddle, first->normal);
-        } else {
-            m_ball.velocity = gamelib::core::reflect(m_ball.velocity, first->normal);
-            m_events.push_back({.kind = firstPaddle ? EventKind::PaddleHit : EventKind::WallHit,
-                                .side = firstPaddle.value_or(Side::Left),
-                                .speed = gamelib::core::length(m_ball.velocity)});
-        }
-    }
+            const Vec2 velocity = gamelib::core::bounce(contact);
+            m_events.push({.kind = contact.id == kWallId ? EventKind::WallHit : EventKind::PaddleHit,
+                           .side = contact.id == kRightPaddleId ? Side::Right : Side::Left,
+                           .speed = gamelib::core::length(velocity)});
+            return velocity;
+        });
+    m_ball.position.value() = moved.center;
+    m_ball.velocity = moved.velocity;
 }
 
-void Match::bounceOffPaddle(const Side side, const Vec2 normal)
+Vec2 Match::bounceOffPaddle(const Side side, const Vec2 normal, const Vec2 velocity)
 {
     const Paddle& paddle = m_paddles[index(side)];
     // Where the ball met the paddle, -1 (top end) to +1 (bottom end): the
     // classic Pong control - the further from the center, the steeper.
     const float reach = kPaddleSize.y / 2.0f + kBallRadius;
-    const float offset = std::clamp((m_ball.position.y - paddle.y) / reach, -1.0f, 1.0f);
+    const float offset = std::clamp((m_ball.position.value().y - paddle.y.value()) / reach, -1.0f, 1.0f);
     const float angle = offset * _radians(m_rules.maxBounceDegrees);
-    const float speed = std::min(gamelib::core::length(m_ball.velocity) * m_rules.speedUpPerHit, m_rules.maxSpeed);
+    const float speed = std::min(gamelib::core::length(velocity) * m_rules.speedUpPerHit, m_rules.maxSpeed);
 
     const float away = normal.x > 0.0f ? 1.0f : -1.0f; // back towards the opponent
     Vec2 direction{away * std::cos(angle), std::sin(angle)};
@@ -166,21 +150,21 @@ void Match::bounceOffPaddle(const Side side, const Vec2 normal)
     // Never let the drag make the return too flat to cross the court.
     direction.y = std::clamp(direction.y, -std::sin(_radians(m_rules.maxBounceDegrees)),
                              std::sin(_radians(m_rules.maxBounceDegrees)));
-    m_ball.velocity = gamelib::core::normalized(direction) * speed;
 
     ++m_rallyHits;
-    m_events.push_back({.kind = EventKind::PaddleHit, .side = side, .speed = speed});
+    m_events.push({.kind = EventKind::PaddleHit, .side = side, .speed = speed});
+    return gamelib::core::normalized(direction) * speed;
 }
 
 void Match::pointFor(const Side scorer)
 {
     ++m_score[index(scorer)];
-    m_events.push_back({.kind = EventKind::Scored, .side = scorer});
+    m_events.push({.kind = EventKind::Scored, .side = scorer});
     if (m_score[index(scorer)] >= m_rules.pointsToWin) {
         m_phase = Phase::GameOver;
-        m_ball = Ball{};
-        m_previousBall = m_ball.position;
-        m_events.push_back({.kind = EventKind::MatchWon, .side = scorer});
+        m_ball.position.snap({kCourtWidth / 2.0f, kCourtHeight / 2.0f});
+        m_ball.velocity = {};
+        m_events.push({.kind = EventKind::MatchWon, .side = scorer});
         return;
     }
     // The player who lost the point receives the next serve.
@@ -190,9 +174,9 @@ void Match::pointFor(const Side scorer)
 void Match::startServe(const Side receiver)
 {
     m_phase = Phase::Serving;
-    m_ball = Ball{};
-    m_previousBall = m_ball.position; // no interpolation streak across the court
-    m_serveCountdown = m_rules.serveDelaySeconds;
+    m_ball.position.snap({kCourtWidth / 2.0f, kCourtHeight / 2.0f}); // no streak across the court
+    m_ball.velocity = {};
+    m_serveArmed = false;
     m_receiver = receiver;
     m_rallyHits = 0;
 }
@@ -203,20 +187,19 @@ void Match::serve()
     const float towards = m_receiver == Side::Left ? -1.0f : 1.0f;
     m_ball.velocity = Vec2{towards * std::cos(angle), std::sin(angle)} * m_rules.serveSpeed;
     m_phase = Phase::Rally;
-    m_events.push_back({.kind = EventKind::Served, .side = m_receiver, .speed = m_rules.serveSpeed});
+    m_events.push({.kind = EventKind::Served, .side = m_receiver, .speed = m_rules.serveSpeed});
 }
 
 void Match::placeBall(const Vec2 position, const Vec2 velocity)
 {
-    m_ball = {.position = position, .velocity = velocity};
-    m_previousBall = position;
+    m_ball.position.snap(position);
+    m_ball.velocity = velocity;
     m_phase = Phase::Rally;
 }
 
 void Match::placePaddle(const Side side, const float y)
 {
-    m_paddles[index(side)].y = std::clamp(y, kMinPaddleY, kMaxPaddleY);
-    m_previousPaddleY[index(side)] = m_paddles[index(side)].y;
+    m_paddles[index(side)].y.snap(std::clamp(y, kMinPaddleY, kMaxPaddleY));
 }
 
 } // namespace pong::game

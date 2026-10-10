@@ -180,7 +180,7 @@ void PongGame::frame(gamelib::app::App& app, const gamelib::app::FrameInfo& info
     m_effects.update(info.seconds);
     handleEvents(app);
     const game::Match& match = activeMatch();
-    m_effects.recordBall(gamelib::core::lerp(match.previousBallPosition(), match.ball().position, info.alpha),
+    m_effects.recordBall(match.ball().position.at(info.alpha),
                          match.phase() == game::Phase::Rally);
 }
 

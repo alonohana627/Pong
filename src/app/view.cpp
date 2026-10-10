@@ -104,9 +104,9 @@ void drawMatch(DrawList& list, const Shapes& shapes, const MatchView& view)
 
     // Paddles, interpolated between ticks, flashing on a hit.
     for (const game::Side side : {game::Side::Left, game::Side::Right}) {
-        const float y = gamelib::core::lerp(match.previousPaddleY(side), match.paddle(side).y, view.alpha);
+        const float y = match.paddle(side).y.at(view.alpha);
         game::Paddle drawn = match.paddle(side);
-        drawn.y = y;
+        drawn.y.snap(y);
         const float flash = view.effects.paddleFlash(side);
         const Color base = side == game::Side::Left ? colors.leftPaddle : colors.rightPaddle;
         Rect rect = drawn.rect(side);
@@ -124,7 +124,7 @@ void drawMatch(DrawList& list, const Shapes& shapes, const MatchView& view)
             list.circle(trail[i] + shake, game::kBallRadius * (1.0f - 0.6f * age),
                         colors.ballGlow.withAlpha(0.35f * (1.0f - age) * fade));
         }
-        const Vec2 position = gamelib::core::lerp(match.previousBallPosition(), match.ball().position, view.alpha);
+        const Vec2 position = match.ball().position.at(view.alpha);
         list.circle(position + shake, game::kBallRadius, colors.ball.withAlpha(fade),
                     {.glowWidth = 26.0f, .glowColor = colors.ballGlow.withAlpha(colors.ballGlow.a * fade)});
     }
@@ -138,7 +138,7 @@ void drawServeHint(DrawList& list, const game::Match& match, const float time)
     const Palette& colors = palette();
     const Vec2 center{kCanvasWidth / 2.0f, kCanvasHeight / 2.0f};
     // A ring closing in on the ball's start as the serve approaches.
-    const float progress = std::clamp(1.0f - match.serveCountdown() / match.rules().serveDelaySeconds, 0.0f, 1.0f);
+    const float progress = match.serveProgress();
     list.circle(center, gamelib::core::lerp(90.0f, game::kBallRadius + 4.0f, progress), colors.ballGlow.withAlpha(0.8f),
                 {.ringWidth = 4.0f, .glowWidth = 12.0f, .glowColor = colors.ballGlow.withAlpha(0.3f)});
     list.circle(center, game::kBallRadius, colors.ball.withAlpha(0.5f + 0.5f * progress));

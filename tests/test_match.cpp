@@ -36,7 +36,7 @@ TEST_CASE("a serve waits for the delay, then goes to the receiver within the ang
     for (std::uint64_t seed = 1; seed <= 50; ++seed) {
         Match match{Rules{}, seed, Side::Right};
         REQUIRE(match.phase() == Phase::Serving);
-        CHECK_EQ(match.ball().position, (Vec2{kCourtWidth / 2.0f, kCourtHeight / 2.0f}));
+        CHECK_EQ(match.ball().position.value(), (Vec2{kCourtWidth / 2.0f, kCourtHeight / 2.0f}));
         int ticks = 0;
         while (match.phase() == Phase::Serving && ticks < 1000) {
             match.tick({}, kDt);
@@ -61,7 +61,7 @@ TEST_CASE("the ball bounces off the walls")
     match.tick({}, kDt); // 5 units of motion: hits the top wall
     CHECK(match.ball().velocity.y > 0.0f);
     CHECK_NEAR(match.ball().velocity.y, 600.0f, 1e-3);
-    CHECK(match.ball().position.y >= kWallThickness + kBallRadius);
+    CHECK(match.ball().position.value().y >= kWallThickness + kBallRadius);
     CHECK(_has(match.takeEvents(), EventKind::WallHit));
 
     match.placeBall({960.0f, kCourtHeight - kWallThickness - kBallRadius - 1.0f}, {300.0f, 900.0f});
@@ -121,7 +121,7 @@ TEST_CASE("a fast ball cannot tunnel through a paddle")
     match.placeBall({400.0f, 540.0f}, {-60'000.0f, 0.0f});
     match.tick({}, kDt);
     CHECK(match.ball().velocity.x > 0.0f);
-    CHECK(match.ball().position.x > Paddle{}.rect(Side::Left).right());
+    CHECK(match.ball().position.value().x > Paddle{}.rect(Side::Left).right());
     CHECK_EQ(match.score(Side::Right), 0);
 }
 
@@ -137,8 +137,8 @@ TEST_CASE("a missed ball scores for the other side and the loser receives next")
     CHECK_EQ(match.score(Side::Left), 0);
     CHECK(match.phase() == Phase::Serving);
     CHECK(match.receiver() == Side::Left);
-    CHECK_EQ(match.ball().position, (Vec2{kCourtWidth / 2.0f, kCourtHeight / 2.0f}));
-    CHECK_EQ(match.previousBallPosition(), match.ball().position); // no streak across the court
+    CHECK_EQ(match.ball().position.value(), (Vec2{kCourtWidth / 2.0f, kCourtHeight / 2.0f}));
+    CHECK_EQ(match.ball().position.previous(), match.ball().position.value()); // no streak across the court
     const auto events = match.takeEvents();
     REQUIRE(_has(events, EventKind::Scored));
     CHECK(std::ranges::find(events, Event{.kind = EventKind::Scored, .side = Side::Right}) != events.end());
@@ -178,12 +178,12 @@ TEST_CASE("the match ends at the winning score and then stays over")
 TEST_CASE("paddles move with input and stay inside the court")
 {
     Match match{Rules{}, 1};
-    const float start = match.paddle(Side::Left).y;
+    const float start = match.paddle(Side::Left).y.value();
     match.tick({.left = -1.0f, .right = 0.5f}, kDt);
-    CHECK_NEAR(match.paddle(Side::Left).y, start - Rules{}.paddleSpeed * kDt, 1e-3);
-    CHECK_NEAR(match.paddle(Side::Right).y, start + 0.5f * Rules{}.paddleSpeed * kDt, 1e-3);
+    CHECK_NEAR(match.paddle(Side::Left).y.value(), start - Rules{}.paddleSpeed * kDt, 1e-3);
+    CHECK_NEAR(match.paddle(Side::Right).y.value(), start + 0.5f * Rules{}.paddleSpeed * kDt, 1e-3);
     CHECK_NEAR(match.paddle(Side::Left).velocity, -Rules{}.paddleSpeed, 1e-2);
-    CHECK_NEAR(match.previousPaddleY(Side::Left), start, 0.0);
+    CHECK_NEAR(match.paddle(Side::Left).y.previous(), start, 0.0);
 
     for (int i = 0; i < 400; ++i) {
         match.tick({.left = -5.0f, .right = 1.0f}, kDt); // out-of-range input is clamped
@@ -201,7 +201,7 @@ TEST_CASE("the simulation is deterministic for a seed and inputs")
             const float wave = std::sin(static_cast<float>(i) * 0.05f);
             match.tick({.left = wave, .right = -wave}, kDt);
         }
-        return std::tuple{match.ball().position.x, match.ball().position.y, match.score(Side::Left),
+        return std::tuple{match.ball().position.value().x, match.ball().position.value().y, match.score(Side::Left),
                           match.score(Side::Right)};
     };
     CHECK(play(11) == play(11));

@@ -1,12 +1,14 @@
 #pragma once
 
+#include <gamelib/core/event_queue.hpp>
+#include <gamelib/core/interpolated.hpp>
 #include <gamelib/core/math.hpp>
 #include <gamelib/core/rng.hpp>
+#include <gamelib/core/timers.hpp>
 
 #include <array>
 #include <cstdint>
 #include <optional>
-#include <vector>
 
 namespace pong::game {
 
@@ -43,14 +45,16 @@ struct Rules {
 };
 
 struct Paddle {
-    float y = kCourtHeight / 2.0f; // center
+    // The center, interpolated between ticks for drawing (y.at(alpha)).
+    gamelib::core::Interpolated<float> y{kCourtHeight / 2.0f};
     float velocity = 0.0f;         // units per second during the last tick
 
     [[nodiscard]] gamelib::core::Rect rect(Side side) const;
 };
 
 struct Ball {
-    gamelib::core::Vec2 position{kCourtWidth / 2.0f, kCourtHeight / 2.0f};
+    // The center, interpolated between ticks for drawing (position.at(alpha)).
+    gamelib::core::Interpolated<gamelib::core::Vec2> position{gamelib::core::Vec2{kCourtWidth / 2.0f, kCourtHeight / 2.0f}};
     gamelib::core::Vec2 velocity;
 };
 
@@ -100,12 +104,8 @@ public:
     [[nodiscard]] std::optional<Side> winner() const;
     [[nodiscard]] const Ball& ball() const { return m_ball; }
     [[nodiscard]] const Paddle& paddle(Side side) const { return m_paddles[index(side)]; }
-    // Where the ball and paddles were before the last tick: views interpolate
-    // between these and the current state for smooth motion at any frame rate.
-    [[nodiscard]] gamelib::core::Vec2 previousBallPosition() const { return m_previousBall; }
-    [[nodiscard]] float previousPaddleY(Side side) const { return m_previousPaddleY[index(side)]; }
-    // Seconds left before the serve (Serving phase only).
-    [[nodiscard]] float serveCountdown() const { return m_serveCountdown; }
+    // How far the serve countdown has run, 0..1 (Serving phase only).
+    [[nodiscard]] float serveProgress() const { return m_serveArmed ? m_serveCountdown.progress() : 0.0f; }
     // The side the next (or last) serve went to.
     [[nodiscard]] Side receiver() const { return m_receiver; }
     // Paddle returns in the current rally.
@@ -118,7 +118,8 @@ public:
 private:
     void movePaddles(const Input& input, float dt);
     void moveBall(float dt);
-    void bounceOffPaddle(Side side, gamelib::core::Vec2 normal);
+    // The velocity after a return off a paddle's front face.
+    [[nodiscard]] gamelib::core::Vec2 bounceOffPaddle(Side side, gamelib::core::Vec2 normal, gamelib::core::Vec2 velocity);
     void pointFor(Side scorer);
     void startServe(Side receiver);
     void serve();
@@ -128,13 +129,12 @@ private:
     Phase m_phase = Phase::Serving;
     std::array<int, 2> m_score{};
     std::array<Paddle, 2> m_paddles{};
-    std::array<float, 2> m_previousPaddleY{kCourtHeight / 2.0f, kCourtHeight / 2.0f};
     Ball m_ball;
-    gamelib::core::Vec2 m_previousBall = m_ball.position;
-    float m_serveCountdown = 0.0f;
+    gamelib::core::Countdown m_serveCountdown; // armed on the first Serving tick (it needs dt)
+    bool m_serveArmed = false;
     Side m_receiver = Side::Left;
     int m_rallyHits = 0;
-    std::vector<Event> m_events;
+    gamelib::core::EventQueue<Event> m_events;
 };
 
 } // namespace pong::game
