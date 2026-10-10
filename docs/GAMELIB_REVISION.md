@@ -15,5 +15,5 @@ spans both, GameLib is committed first, then Pong with the new revision here.
 Since the GitHub switch, `CMakeLists.txt` pins GameLib by tag (`GIT_TAG`), so
 checking out a Pong commit reproduces its combination by itself. For older
 rows, configure with `-DFETCHCONTENT_SOURCE_DIR_GAMELIB=<GameLib checkout at
-that revision>`. CMake prints the GameLib
-revision it builds against (`Pong: using GameLib ...`).
+that revision>`. CMake prints the GameLib revision it builds against
+(`Pong: using GameLib ...`).

@@ -1,7 +1,7 @@
 # Notes for coding agents
 
 Pong is the first game built on GameLib (https://github.com/alonohana627/GameLib,
-locally `C:SERSSERGAMELIB`; A SEPARATE REPOSITORY).
+locally `C:\Users\user\GameLib`; a separate repository).
 It is GameLib's acceptance test: if Pong needs a general mechanism GameLib
 lacks, the mechanism goes into GameLib (with tests) and Pong uses it; Pong's
 own rules, look and sounds stay here.
