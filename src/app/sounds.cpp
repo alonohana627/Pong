@@ -54,16 +54,4 @@ std::vector<float> renderSfx(const Sfx sfx, const std::uint32_t sampleRate)
     return gamelib::audio::renderMix(recipe.tracks, recipe.peakDb, sampleRate);
 }
 
-Sounds::Sounds(gamelib::audio::Player& player)
-{
-    for (std::size_t i = 0; i < kSfxCount; ++i) {
-        m_ids[i] = player.add(renderSfx(static_cast<Sfx>(i), player.sampleRate()));
-    }
-}
-
-void Sounds::queue(gamelib::audio::SoundQueue& queue, const Sfx sfx, const float pitch) const
-{
-    queue.queue(m_ids[static_cast<std::size_t>(sfx)], 1.0f, pitch);
-}
-
 } // namespace pong::app

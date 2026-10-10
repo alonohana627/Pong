@@ -3,6 +3,8 @@
 #include "ai.hpp"
 
 #include <gamelib/audio/player.hpp>
+#include <gamelib/core/options.hpp>
+#include <gamelib/storage/persisted.hpp>
 
 #include <filesystem>
 
@@ -17,13 +19,16 @@ struct Settings {
     friend bool operator==(const Settings&, const Settings&) = default;
 };
 
+inline constexpr gamelib::core::OptionSet<gamelib::audio::VolumeLevel, 4> kVolumes{{"OFF", "LOW", "MEDIUM", "HIGH"}};
+
+// The settings file, loaded with defaults for anything missing or broken and
+// written only when something changed (GameLib's storage::Persisted).
+using SettingsFile = gamelib::storage::Persisted<Settings>;
+
 // pong.ini in the user data folder (%APPDATA%\Pong on Windows). The
 // environment variable PONG_DATA_DIR overrides the folder (tests use it).
 [[nodiscard]] std::filesystem::path settingsPath();
 
-// Never fails: a missing file, key or unreadable value keeps its default.
-[[nodiscard]] Settings loadSettings(const std::filesystem::path& path);
-// Writes atomically; returns false (after a warning) if it could not.
-bool saveSettings(const std::filesystem::path& path, const Settings& settings);
+[[nodiscard]] SettingsFile openSettings(const std::filesystem::path& path);
 
 } // namespace pong::app
