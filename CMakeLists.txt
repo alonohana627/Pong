@@ -14,13 +14,16 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 option(PONG_BUILD_TESTS "Build Pong's tests" ON)
 
 # --- GameLib -----------------------------------------------------------------
-# GameLib is consumed as a library target, never copied. By default it is the
-# sibling checkout next to this folder (../GameLib). To use another checkout,
-# configure with -DFETCHCONTENT_SOURCE_DIR_GAMELIB=<path> (best kept in
-# CMakeUserPresets.json). Once GameLib has a remote, replace SOURCE_DIR with
-# GIT_REPOSITORY + a pinned GIT_TAG commit.
+# GameLib is consumed as a library target, never copied: downloaded from
+# GitHub at a pinned release tag (with its GLFW/miniaudio submodules) into the
+# build tree. To develop against a local checkout instead, configure with
+#   -DFETCHCONTENT_SOURCE_DIR_GAMELIB=<path to GameLib>
+# (best kept in CMakeUserPresets.json, which is not committed).
 include(FetchContent)
-FetchContent_Declare(GameLib SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../GameLib")
+FetchContent_Declare(GameLib
+    GIT_REPOSITORY https://github.com/alonohana627/GameLib.git
+    GIT_TAG        0.0.1   # fd33b9b; bump together with docs/GAMELIB_REVISION.md
+    GIT_SHALLOW    TRUE)
 FetchContent_MakeAvailable(GameLib)
 
 # Print the GameLib revision being built against, for bug reports and for the

@@ -1,6 +1,6 @@
 # Pong
 
-The classic, rebuilt as the first game on [GameLib](../GameLib): two paddles,
+The classic, rebuilt as the first game on [GameLib](https://github.com/alonohana627/GameLib): two paddles,
 one ball, first to 11. Everything you see is drawn by Vulkan shaders - glowing
 SDF paddles and ball, a pulsing net, seven-segment score digits - and every
 sound is synthesized. There are no image or audio files.
@@ -21,10 +21,11 @@ The title screen plays a computer-vs-computer match behind the menu;
 
 ## Build
 
-Pong builds GameLib from the sibling folder `../GameLib` as part of its own
-build (CMake FetchContent; no install step). Requirements are GameLib's: MSYS2
+Pong downloads GameLib from GitHub at a pinned release tag (CMake
+FetchContent, into the build folder) and builds it as part of its own build;
+no install step. Requirements are GameLib's: MSYS2
 CLANG64 with Clang, CMake 3.28+, Ninja, glslc, a Vulkan 1.3 driver - see
-`../GameLib/docs/GETTING_STARTED.md`.
+GameLib's `docs/GETTING_STARTED.md`.
 
 ```powershell
 cmake --preset debug
@@ -34,7 +35,8 @@ ctest --preset debug            # gameplay tests and three smoke runs
 ctest --preset debug-headless   # gameplay tests only
 ```
 
-Another GameLib checkout: `cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMELIB=<path>`.
+A local GameLib checkout instead (for developing both together):
+`cmake --preset debug -DFETCHCONTENT_SOURCE_DIR_GAMELIB=C:/Users/user/GameLib`.
 The GameLib revision each Pong change was validated with is in
 [docs/GAMELIB_REVISION.md](docs/GAMELIB_REVISION.md).
 
