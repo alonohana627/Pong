@@ -22,8 +22,8 @@ option(PONG_BUILD_TESTS "Build Pong's tests" ON)
 include(FetchContent)
 FetchContent_Declare(GameLib
     GIT_REPOSITORY https://github.com/alonohana627/GameLib.git
-    GIT_TAG        0.0.1   # fd33b9b; bump together with docs/GAMELIB_REVISION.md
-    GIT_SHALLOW    TRUE)
+    GIT_TAG        9ac8627e21cd0e73911c2dacc16ea36bfac83fc7   # main before 0.0.2; bump with docs/GAMELIB_REVISION.md
+    GIT_SHALLOW    FALSE)  # a shallow clone cannot check out an arbitrary commit
 FetchContent_MakeAvailable(GameLib)
 
 # Print the GameLib revision being built against, for bug reports and for the

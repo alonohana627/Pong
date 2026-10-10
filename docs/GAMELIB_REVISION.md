@@ -11,6 +11,7 @@ spans both, GameLib is committed first, then Pong with the new revision here.
 | Playable game (`feat(app)`) | `c893b22` | build, 2 test suites, 3 smoke runs with validation |
 | README (`docs`) | `fd33b9b` | fresh clones of both repositories: GameLib 14/14 CTest, Pong 5/5 CTest in debug and release |
 | GameLib from GitHub (`build`) | `0.0.1` (`fd33b9b`) | clean build fetching the tag, 5/5 CTest |
+| Pin GameLib main before 0.0.2 (`build`) | `9ac8627` | clean build fetching the commit, 5/5 CTest |
 
 Since the GitHub switch, `CMakeLists.txt` pins GameLib by tag (`GIT_TAG`), so
 checking out a Pong commit reproduces its combination by itself. For older
